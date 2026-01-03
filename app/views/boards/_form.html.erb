@@ -1,0 +1,41 @@
+<%= form_with model: board, class: "space-y-6" do |f| %>
+  <% if board.errors.any? %>
+    <div class="rounded-md bg-red-50 p-4">
+      <div class="flex">
+        <div class="ml-3">
+          <h3 class="text-sm font-medium text-red-800">
+            <%= pluralize(board.errors.count, "error") %> prevented this board from being saved:
+          </h3>
+          <div class="mt-2 text-sm text-red-700">
+            <ul class="list-disc pl-5 space-y-1">
+              <% board.errors.full_messages.each do |message| %>
+                <li><%= message %></li>
+              <% end %>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  <% end %>
+
+  <div>
+    <%= f.label :title, class: "block text-sm font-medium text-gray-700" %>
+    <%= f.text_field :title,
+        required: true,
+        autofocus: true,
+        class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+  </div>
+
+  <div>
+    <%= f.label :description, class: "block text-sm font-medium text-gray-700" %>
+    <%= f.text_area :description,
+        rows: 3,
+        class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+    <p class="mt-1 text-xs text-gray-500">Optional description for your board</p>
+  </div>
+
+  <div class="flex items-center justify-between pt-4">
+    <%= link_to "Cancel", boards_path, class: "text-sm font-medium text-gray-700 hover:text-gray-500" %>
+    <%= f.submit class: "inline-flex justify-center rounded-md border border-transparent bg-indigo-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 cursor-pointer" %>
+  </div>
+<% end %>

@@ -1,57 +1,62 @@
-# base node image
-FROM node:18-bullseye-slim as base
+# syntax = docker/dockerfile:1
 
-# Install openssl for Prisma
-RUN apt-get update && apt-get install -y openssl
+# Make sure RUBY_VERSION matches the Ruby version in .ruby-version and Gemfile
+ARG RUBY_VERSION=3.3.6
+FROM registry.docker.com/library/ruby:$RUBY_VERSION-slim as base
 
-ENV NODE_ENV production
+# Rails app lives here
+WORKDIR /rails
 
-# Install all node_modules, including dev dependencies
-FROM base as deps
+# Set production environment
+ENV RAILS_ENV="production" \
+    BUNDLE_DEPLOYMENT="1" \
+    BUNDLE_PATH="/usr/local/bundle" \
+    BUNDLE_WITHOUT="development"
 
-RUN mkdir /app
-WORKDIR /app
 
-ADD package.json package-lock.json ./
-RUN npm install --production=false
-
-# Setup production node_modules
-FROM base as production-deps
-
-RUN mkdir /app
-WORKDIR /app
-
-COPY --from=deps /app/node_modules /app/node_modules
-ADD package.json package-lock.json ./
-RUN npm prune --production
-
-# Build the app
+# Throw-away build stage to reduce size of final image
 FROM base as build
 
-RUN mkdir /app
-WORKDIR /app
+# Install packages needed to build gems
+RUN apt-get update -qq && \
+    apt-get install --no-install-recommends -y build-essential git libvips pkg-config
 
-COPY --from=deps /app/node_modules /app/node_modules
+# Install application gems
+COPY Gemfile Gemfile.lock ./
+RUN bundle install && \
+    rm -rf ~/.bundle/ "${BUNDLE_PATH}"/ruby/*/cache "${BUNDLE_PATH}"/ruby/*/bundler/gems/*/.git && \
+    bundle exec bootsnap precompile --gemfile
 
-ADD prisma .
-RUN npx prisma generate
+# Copy application code
+COPY . .
 
-ADD . .
-RUN npm run build
+# Precompile bootsnap code for faster boot times
+RUN bundle exec bootsnap precompile app/ lib/
 
-# Finally, build the production image with minimal footprint
+# Precompiling assets for production without requiring secret RAILS_MASTER_KEY
+RUN SECRET_KEY_BASE_DUMMY=1 ./bin/rails assets:precompile
+
+
+# Final stage for app image
 FROM base
 
-ENV NODE_ENV production
+# Install packages needed for deployment
+RUN apt-get update -qq && \
+    apt-get install --no-install-recommends -y curl libsqlite3-0 libvips && \
+    rm -rf /var/lib/apt/lists /var/cache/apt/archives
 
-RUN mkdir /app
-WORKDIR /app
+# Copy built artifacts: gems, application
+COPY --from=build /usr/local/bundle /usr/local/bundle
+COPY --from=build /rails /rails
 
-COPY --from=production-deps /app/node_modules /app/node_modules
-COPY --from=build /app/node_modules/.prisma /app/node_modules/.prisma
-COPY --from=build /app/build /app/build
-COPY --from=build /app/public /app/public
-ADD . .
+# Run and own only the runtime files as a non-root user for security
+RUN useradd rails --create-home --shell /bin/bash && \
+    chown -R rails:rails db log storage tmp
+USER rails:rails
 
-# CMD ["npm", "run", "start"]
-ENTRYPOINT [ "./start.sh" ]
+# Entrypoint prepares the database.
+ENTRYPOINT ["/rails/bin/docker-entrypoint"]
+
+# Start the server by default, this can be overwritten at runtime
+EXPOSE 3000
+CMD ["./bin/rails", "server"]
