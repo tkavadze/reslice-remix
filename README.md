@@ -1,6 +1,6 @@
 # Kanban Board
 
-A full-featured Kanban board SaaS web application for task management, built with Ruby on Rails 7.1, Hotwire (Turbo + Stimulus), and Tailwind CSS.
+A full-featured Kanban board SaaS web application for task management, built with Ruby on Rails 8, Hotwire (Turbo + Stimulus), and Tailwind CSS.
 
 ## Features
 
@@ -15,11 +15,15 @@ A full-featured Kanban board SaaS web application for task management, built wit
 
 ## Tech Stack
 
-- **Backend**: Ruby on Rails 7.1
+- **Backend**: Ruby on Rails 8.0
 - **Database**: SQLite3
+- **Asset Pipeline**: Propshaft
 - **Frontend**: Hotwire (Turbo + Stimulus)
 - **Styling**: Tailwind CSS 4
 - **JavaScript**: Importmaps
+- **Background Jobs**: Solid Queue (SQLite-backed)
+- **Caching**: Solid Cache (SQLite-backed)
+- **WebSockets**: Solid Cable (SQLite-backed)
 
 ## Getting Started
 
@@ -43,7 +47,7 @@ A full-featured Kanban board SaaS web application for task management, built wit
 
 3. Set up the database:
    ```bash
-   bin/rails db:setup
+   bin/rails db:prepare
    ```
 
 4. Start the server:
@@ -67,11 +71,17 @@ After running seeds, you can sign in with:
 bin/rails test
 ```
 
+### Running Background Jobs
+
+```bash
+bin/jobs
+```
+
 ### Database Commands
 
 ```bash
-# Create database
-bin/rails db:create
+# Prepare all databases (primary, cache, queue, cable)
+bin/rails db:prepare
 
 # Run migrations
 bin/rails db:migrate
