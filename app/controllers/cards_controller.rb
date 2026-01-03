@@ -36,7 +36,8 @@ class CardsController < ApplicationController
   end
 
   def move
-    target_column_id = params[:column_id].presence || @column.id
+    # Use target_column_id from body to avoid conflict with column_id URL param
+    target_column_id = params[:target_column_id].presence || @column.id
     target_column = @board.columns.find(target_column_id)
     target_position = params[:position].to_i
 

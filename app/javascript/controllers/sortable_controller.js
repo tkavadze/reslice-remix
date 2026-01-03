@@ -8,6 +8,13 @@ export default class extends Controller {
 
   connect() {
     this.initializeSortable()
+    this.observeNewCards()
+  }
+
+  disconnect() {
+    if (this.observer) {
+      this.observer.disconnect()
+    }
   }
 
   initializeSortable() {
@@ -18,18 +25,39 @@ export default class extends Controller {
     this.makeChildrenDraggable()
   }
 
+  // Watch for new cards added via Turbo Stream
+  observeNewCards() {
+    this.observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        mutation.addedNodes.forEach((node) => {
+          if (node.nodeType === Node.ELEMENT_NODE && node.dataset.sortableId) {
+            this.makeElementDraggable(node)
+          }
+        })
+      })
+    })
+
+    this.observer.observe(this.element, { childList: true })
+  }
+
   makeChildrenDraggable() {
     Array.from(this.element.children).forEach(child => {
       if (child.dataset.sortableId) {
-        child.draggable = true
-        child.addEventListener("dragstart", this.onDragStart.bind(this))
-        child.addEventListener("dragend", this.onDragEnd.bind(this))
+        this.makeElementDraggable(child)
       }
     })
   }
 
+  makeElementDraggable(element) {
+    element.draggable = true
+    element.addEventListener("dragstart", this.onDragStart.bind(this))
+    element.addEventListener("dragend", this.onDragEnd.bind(this))
+  }
+
   onDragStart(event) {
-    const item = event.target
+    const item = event.target.closest("[data-sortable-id]")
+    if (!item) return
+
     item.classList.add("opacity-50")
     event.dataTransfer.effectAllowed = "move"
     event.dataTransfer.setData("text/plain", JSON.stringify({
@@ -39,14 +67,17 @@ export default class extends Controller {
   }
 
   onDragEnd(event) {
-    event.target.classList.remove("opacity-50")
+    const item = event.target.closest("[data-sortable-id]")
+    if (item) {
+      item.classList.remove("opacity-50")
+    }
   }
 
   onDragOver(event) {
     event.preventDefault()
     event.dataTransfer.dropEffect = "move"
 
-    const draggingItem = document.querySelector(".opacity-50")
+    const draggingItem = document.querySelector("[data-sortable-id].opacity-50")
     if (!draggingItem) return
 
     const afterElement = this.getDragAfterElement(event.clientY)
@@ -60,7 +91,14 @@ export default class extends Controller {
   onDrop(event) {
     event.preventDefault()
 
-    const data = JSON.parse(event.dataTransfer.getData("text/plain"))
+    let data
+    try {
+      data = JSON.parse(event.dataTransfer.getData("text/plain"))
+    } catch (e) {
+      console.error("Failed to parse drag data:", e)
+      return
+    }
+
     const cardId = data.id
     const sourceColumnId = data.sourceColumnId
     const targetColumnId = this.element.closest("[data-column-id-value]")?.dataset.columnIdValue
@@ -68,7 +106,7 @@ export default class extends Controller {
     // Calculate new position
     const items = Array.from(this.element.querySelectorAll("[data-sortable-id]"))
     const droppedItem = items.find(item => item.dataset.sortableId === cardId)
-    const newPosition = items.indexOf(droppedItem)
+    const newPosition = droppedItem ? items.indexOf(droppedItem) : items.length
 
     // Update on server
     this.updatePosition(cardId, sourceColumnId, targetColumnId, newPosition)
@@ -102,18 +140,18 @@ export default class extends Controller {
           "Accept": "application/json"
         },
         body: JSON.stringify({
-          column_id: targetColumnId,
+          target_column_id: targetColumnId,
           position: position
         })
       })
 
       if (!response.ok) {
         console.error("Failed to update card position")
-        // Optionally reload the page to reset state
-        // window.location.reload()
+        window.location.reload()
       }
     } catch (error) {
       console.error("Error updating card position:", error)
+      window.location.reload()
     }
   }
 }
